@@ -1,0 +1,53 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'check = bauen und prüfen, publish = zusätzlich veröffentlichen'
+        required: true
+        default: check
+        type: choice
+        options: [check, publish]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        id: v
+        run: |
+          V=$(cat VERSION)
+          echo "$V" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          head -1 RELEASE_NOTES.md | grep -q "^# c9n-ext-media $V\$"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: Unit tests of the service rules
+        run: python3 -m unittest tests.test_server
+      - name: Build image
+        run: docker build --platform linux/amd64 --build-arg VERSION=${{ steps.v.outputs.version }} -t c9n-ext-media:${{ steps.v.outputs.version }} .
+      - name: Prove the service in the container, with a shared data folder
+        run: |
+          TOKEN=$(openssl rand -hex 24)
+          mkdir -p "$RUNNER_TEMP/data" && chmod 777 "$RUNNER_TEMP/data"
+          docker run -d --name ext --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1:19301:9301 -v "$RUNNER_TEMP/data:/data" -e C9N_EXT_TOKEN=$TOKEN c9n-ext-media:${{ steps.v.outputs.version }}
+          for i in $(seq 1 30); do [ "$(docker inspect -f '{{.State.Health.Status}}' ext)" = healthy ] && break; sleep 3; done
+          [ "$(docker inspect -f '{{.State.Health.Status}}' ext)" = healthy ] || { docker logs ext; exit 1; }
+          pip install --quiet pillow
+          python scripts/smoke.py 127.0.0.1:19301 $TOKEN "$RUNNER_TEMP/data"
+          docker rm -f ext
+      - name: Package
+        run: |
+          V=${{ steps.v.outputs.version }}
+          mkdir -p out && A=c9n-ext-media-$V-linux-amd64.tar.gz
+          docker save c9n-ext-media:$V | gzip -n -1 > out/$A
+          python scripts/package.py out $V c9n-ext-media:$V "$(docker image inspect c9n-ext-media:$V -f '{{.Id}}')" $A
+          ls -l out
+      - name: Publish
+        if: inputs.mode == 'publish'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=${{ steps.v.outputs.version }}
+          gh release create "v$V" out/* --title "c9n-ext-media $V" --notes-file RELEASE_NOTES.md --latest
