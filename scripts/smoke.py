@@ -37,7 +37,7 @@ except OSError:
     font = ImageFont.load_default(size=72)
 draw.text((20, 30), 'c9n media 2026', fill='black', font=font)
 image.save(data / 'ocr.png')
-status, result = call('ocr?lang=deu+eng', (data / 'ocr.png').read_bytes())
+status, result = call('ocr?lang=deu%2Beng&psm=11', (data / 'ocr.png').read_bytes())
 assert status == 200 and 'media' in result['text'].lower() and '2026' in result['text'], (status, result)
 
 # 2. ffmpeg writes a file into the shared folder, ffprobe reads it

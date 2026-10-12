@@ -1,6 +1,6 @@
 """c9n extension "media": the tools of ffmpeg, Tesseract, poppler and qpdf behind HTTP, reachable only under /<token>/.
 
-POST /<token>/ocr?lang=deu+eng   body: image bytes             -> {"text": "..."}
+POST /<token>/ocr?lang=deu+eng&psm=11   body: image bytes             -> {"text": "..."}
 POST /<token>/exec               body: {"tool","args","cwd","timeout"} -> {"code","stdout"(base64),"stderr"}
 GET  /<token>/health
 
@@ -88,10 +88,11 @@ class Handler(BaseHTTPRequestHandler):
         body = self.rfile.read(length)
         if name == 'ocr':
             lang = (query.get('lang') or ['deu+eng'])[0]
-            if not re.fullmatch(r'[a-z]{3}(\+[a-z]{3})*', lang):
-                return self.reply(422, {'error': 'Ungültige Sprache.'})
+            psm = (query.get('psm') or [''])[0]
+            if not re.fullmatch(r'[a-z]{3}(\+[a-z]{3})*', lang) or not re.fullmatch(r'\d{0,2}', psm):
+                return self.reply(422, {'error': 'Ungültige Sprache oder Seitenmodus.'})
             try:
-                done = subprocess.run(['tesseract', 'stdin', 'stdout', '-l', lang], input=body, capture_output=True, timeout=180)
+                done = subprocess.run(['tesseract', 'stdin', 'stdout', '-l', lang, *(['--psm', psm] if psm else [])], input=body, capture_output=True, timeout=180)
             except (OSError, subprocess.TimeoutExpired):
                 return self.reply(500, {'error': 'Texterkennung nicht verfügbar.'})
             if done.returncode:
