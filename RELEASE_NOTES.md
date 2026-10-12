@@ -1,4 +1,4 @@
-# c9n-ext-media 1.0.0
+# c9n-ext-media 0.9.16
 
 ffmpeg, Tesseract (Deutsch, Englisch), poppler und qpdf als Erweiterung für c9n. Texterkennung für Wissens-Screenshots und die Medienwerkzeuge der Agenten laufen über diesen Dienst, sobald die Erweiterung aktiv ist. Verlangt c9n mit Erweiterungs-Schnittstelle 1 (ab c9n 0.9.16).
 
