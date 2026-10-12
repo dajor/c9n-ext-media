@@ -90,7 +90,10 @@ class Handler(BaseHTTPRequestHandler):
             lang = (query.get('lang') or ['deu+eng'])[0]
             if not re.fullmatch(r'[a-z]{3}(\+[a-z]{3})*', lang):
                 return self.reply(422, {'error': 'Ungültige Sprache.'})
-            done = subprocess.run(['tesseract', 'stdin', 'stdout', '-l', lang], input=body, capture_output=True, timeout=180)
+            try:
+                done = subprocess.run(['tesseract', 'stdin', 'stdout', '-l', lang], input=body, capture_output=True, timeout=180)
+            except (OSError, subprocess.TimeoutExpired):
+                return self.reply(500, {'error': 'Texterkennung nicht verfügbar.'})
             if done.returncode:
                 return self.reply(422, {'error': done.stderr.decode(errors='replace')[-2000:] or 'Texterkennung fehlgeschlagen.'})
             return self.reply(200, {'text': done.stdout.decode(errors='replace')})
@@ -111,6 +114,8 @@ class Handler(BaseHTTPRequestHandler):
                 done = subprocess.run([tool, *args], cwd=cwd, capture_output=True, timeout=timeout)
             except subprocess.TimeoutExpired:
                 return self.reply(408, {'error': 'Zeitüberschreitung.'})
+            except OSError:
+                return self.reply(500, {'error': 'Das Werkzeug ist in dieser Erweiterung nicht installiert.'})
             if len(done.stdout) > OUTPUT_LIMIT:
                 return self.reply(413, {'error': 'Die Ausgabe ist zu groß. In eine Datei schreiben.'})
             return self.reply(200, {'code': done.returncode, 'stdout': base64.b64encode(done.stdout).decode(), 'stderr': done.stderr.decode(errors='replace')[-20000:]})

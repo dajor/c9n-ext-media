@@ -63,7 +63,8 @@ class Service(unittest.TestCase):
             self.assertEqual(result['code'], 0)
             self.assertIn(b'qpdf', base64.b64decode(result['stdout']).lower())
         else:
-            self.skipTest('qpdf nicht installiert (läuft im Container-Test)')
+            self.assertEqual(status, 500)  # tool missing on this machine: a sentence, not a dropped connection
+            self.assertIn('nicht installiert', result['error'])
 
 
 if __name__ == '__main__':
